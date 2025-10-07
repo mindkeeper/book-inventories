@@ -75,6 +75,28 @@ This project includes a production-ready deployment setup for a VPS using Docker
 - A Docker Hub account (or other container registry)
 - Optional: a domain and Nginx reverse proxy for HTTPS
 
+### Environment variables
+
+Create or edit `/srv/book-inventories/.env` on the VPS with these variables:
+
+- REGISTRY_IMAGE – your Docker image, e.g. `your-dockerhub-username/book-inventories:latest`
+- NODE_ENV – `production`
+- PORT – external host port (default `3333` in this repo)
+- DATABASE_URL – Neon Postgres connection string (DIRECT recommended): `postgresql://<user>:<password>@<neon_hostname>/<db>?sslmode=require`
+- JWT_SECRET – your JWT secret
+- JWT_EXPIRATION – e.g. `1d`
+- JWT_REFRESH_SECRET – your refresh token secret
+- JWT_REFRESH_EXPIRATION – e.g. `7d`
+- SERVER_NAME – your domain for Nginx (e.g., `api.example.com`), or `_` if none yet
+- ENABLE_SSL – `true` to enable automatic HTTPS via Certbot, else `false`
+- CERTBOT_EMAIL – email registered with Certbot when `ENABLE_SSL=true`
+
+Optional Nginx rate limiting (defaults shown):
+- LIMIT_CONN_ZONE_NAME=`addr`, LIMIT_CONN_ZONE_SIZE=`10m`, LIMIT_CONN_PER_IP=`20`
+- RATE_LIMIT_ZONE_NAME=`api_limit`, RATE_LIMIT_ZONE_SIZE=`10m`, RATE_LIMIT_REQ_RATE=`10r/s`, RATE_LIMIT_BURST=`20`, RATE_LIMIT_DELAYED=`false`
+
+Note: This project maps host `${PORT}` to the container’s internal port `3000`. Adjust your firewall and Nginx accordingly.
+
 ### 1) Prepare the VPS
 
 ```bash
@@ -134,6 +156,27 @@ On every push to `main`, GitHub Actions will:
 
 After completion, the API will be available on `http://<vps-host>:3000` (or the `PORT` you set). Swagger is at `/swagger`.
 
+Alternatively, you can perform the first deployment and configure the reverse proxy with the helper script:
+
+```bash
+# On your local machine
+scp deploy/deploy.sh <vps-user>@<vps-host>:/srv/book-inventories/
+
+# On the VPS
+ssh <vps-user>@<vps-host>
+cd /srv/book-inventories
+chmod +x deploy.sh
+./deploy.sh
+```
+
+The script will:
+- Validate `.env` for required keys
+- Log in to Docker Hub if `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are exported
+- Pull the latest image and run `docker compose up -d`
+- Install and configure Nginx as a reverse proxy to `127.0.0.1:${PORT}`
+- Optionally obtain HTTPS via Certbot when `ENABLE_SSL=true` and `SERVER_NAME` + `CERTBOT_EMAIL` are set
+- Write rate limit zones and apply sensible defaults (see variables above)
+
 ### 4) Install Nginx Reverse Proxy + HTTPS
 
 Install Nginx on the VPS and proxy traffic from port 80/443 to the app:
@@ -167,12 +210,18 @@ Prisma migrations run automatically on container start via `npx prisma migrate d
 - Check container logs: `docker compose logs -f app`
 - Recreate stack: `docker compose pull && docker compose up -d --remove-orphans`
 - Clean up unused images: `docker image prune -f`
+
+Nginx / SSL:
+- Test config: `sudo nginx -t`; reload: `sudo systemctl reload nginx`
+- If rate limits are too strict, tune `RATE_LIMIT_REQ_RATE`, `RATE_LIMIT_BURST`, `LIMIT_CONN_PER_IP`
+- Certbot failures usually mean DNS not pointing at the VPS or firewall blocking 80/443
 ### Files added for deployment
 
 - `Dockerfile` – production image with Prisma
 - `.dockerignore` – reduce context size and exclude secrets
 - `deploy/docker-compose.yml` – app + Postgres stack
-- `deploy/.env.example` – example environment file for VPS
+- `deploy/.env.example` – example environment file for VPS (includes reverse proxy and rate limiting variables)
+- `deploy/deploy.sh` – helper script to deploy, install Nginx, set up reverse proxy, optional SSL, and rate limiting
 - `.github/workflows/deploy.yml` – CI/CD pipeline for build and deploy
 
 ## Resources
