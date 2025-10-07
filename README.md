@@ -59,16 +59,121 @@ $ npm run test:cov
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+This project includes a production-ready deployment setup for a VPS using Docker, Docker Compose, and GitHub Actions (CI/CD). It also auto-runs Prisma migrations on startup.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Overview
+
+- Containerized app with a Dockerfile
+- External Postgres (Neon) via DATABASE_URL
+- CI/CD via GitHub Actions: build and push image to Docker Hub, then deploy to VPS
+- Environment-driven configuration
+
+### Prerequisites
+
+- A VPS (e.g., Ubuntu 22.04) with SSH access
+- Docker Engine and Docker Compose plugin installed
+- A Docker Hub account (or other container registry)
+- Optional: a domain and Nginx reverse proxy for HTTPS
+
+### 1) Prepare the VPS
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Log in to VPS
+ssh <vps-user>@<vps-host>
+
+# Install Docker (Ubuntu)
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Create deployment directory
+sudo mkdir -p /srv/book-inventories
+sudo chown -R $USER:$USER /srv/book-inventories
+cd /srv/book-inventories
+
+# Create .env from example (edit values accordingly)
+cat > .env << 'EOF'
+# From deploy/.env.example. Replace secrets accordingly.
+REGISTRY_IMAGE=your-dockerhub-username/book-inventories:latest
+NODE_ENV=production
+PORT=3000
+# Use the DIRECT Neon connection string (not pooled), e.g.:
+# postgresql://<user>:<password>@<neon_hostname>/<db>?sslmode=require
+DATABASE_URL=postgresql://user:password@your-neon-hosting-url/dbname?sslmode=require
+JWT_SECRET=replace-with-strong-secret
+EOF
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Note: This setup assumes an external Postgres (Neon). The local `db` service has been removed from `docker-compose.yml`.
+
+### 2) Configure GitHub Secrets
+
+In your repository settings → Secrets and variables → Actions, add:
+
+- `DOCKERHUB_USERNAME` – your Docker Hub username
+- `DOCKERHUB_TOKEN` – a Docker Hub access token
+- `VPS_HOST` – VPS hostname or IP
+- `VPS_USER` – SSH user for the VPS
+- `VPS_SSH_KEY` – private SSH key contents (e.g., `~/.ssh/id_rsa`) for the above user
+- `VPS_DEPLOY_PATH` – path on VPS, e.g., `/srv/book-inventories`
+
+### 3) First Deployment
+
+On every push to `main`, GitHub Actions will:
+
+1. Build and push the Docker image to Docker Hub
+2. Copy `deploy/docker-compose.yml` to `${VPS_DEPLOY_PATH}` on your VPS
+3. SSH into the VPS, log in to Docker Hub, pull the image, and run `docker compose up -d`
+
+After completion, the API will be available on `http://<vps-host>:3000` (or the `PORT` you set). Swagger is at `/swagger`.
+
+### 4) Install Nginx Reverse Proxy + HTTPS
+
+Install Nginx on the VPS and proxy traffic from port 80/443 to the app:
+
+```bash
+sudo apt-get install -y nginx
+sudo ufw allow 'Nginx Full' || true
+
+# Copy the example config from the repo (adjust server_name)
+sudo tee /etc/nginx/sites-available/book-inventories.conf > /dev/null <<'NGINX'
+$(cat deploy/nginx.conf.example)
+NGINX
+
+sudo ln -sf /etc/nginx/sites-available/book-inventories.conf /etc/nginx/sites-enabled/book-inventories.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+For HTTPS, obtain a certificate via Certbot:
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d api.example.com
+```
+
+### 5) Database Migrations
+
+Prisma migrations run automatically on container start via `npx prisma migrate deploy`. Ensure `DATABASE_URL` is correct and reachable.
+
+### 6) Troubleshooting
+
+- Check container logs: `docker compose logs -f app`
+- Recreate stack: `docker compose pull && docker compose up -d --remove-orphans`
+- Clean up unused images: `docker image prune -f`
+### Files added for deployment
+
+- `Dockerfile` – production image with Prisma
+- `.dockerignore` – reduce context size and exclude secrets
+- `deploy/docker-compose.yml` – app + Postgres stack
+- `deploy/.env.example` – example environment file for VPS
+- `.github/workflows/deploy.yml` – CI/CD pipeline for build and deploy
 
 ## Resources
 

@@ -1,0 +1,33 @@
+# Nginx reverse proxy for Book Inventories API
+# Copy this to /etc/nginx/sites-available/book-inventories.conf
+# Then: sudo ln -s /etc/nginx/sites-available/book-inventories.conf /etc/nginx/sites-enabled/
+#       sudo nginx -t && sudo systemctl reload nginx
+
+server {
+  listen 80;
+  server_name api.example.com; # change to your domain or VPS IP
+
+  # Increase buffer sizes for larger headers if using JWTs
+  large_client_header_buffers 4 16k;
+
+  location / {
+    proxy_pass http://127.0.0.1:3333; # app exposed on host port 3333 via docker-compose
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Optional: serve Swagger at /swagger
+  location /swagger {
+    proxy_pass http://127.0.0.1:3333/swagger;
+    proxy_set_header Host $host;
+  }
+}
+
+# For HTTPS, obtain a certificate via Certbot:
+#   sudo apt-get install -y certbot python3-certbot-nginx
+#   sudo certbot --nginx -d api.example.com
