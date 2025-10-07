@@ -24,7 +24,7 @@ export class ZodExceptionFilter implements ExceptionFilter {
     const isProduction =
       this.configService.get<string>('NODE_ENV') === 'production';
 
-    this.logger.error(`Zod Error: ${JSON.stringify(exception.issues)}`);
+    this.logger.error(`Validation Error: ${JSON.stringify(exception.issues)}`);
     const errorResponse = {
       statusCode,
       timestamp: new Date().toISOString(),

@@ -13,3 +13,11 @@ export class SignUpEntity {
   })
   password: string;
 }
+
+export class SignUpResponse {
+  @ApiProperty({
+    example: 'dfdsaffajdfk',
+    description: 'access token',
+  })
+  access_token: string;
+}

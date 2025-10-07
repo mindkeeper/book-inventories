@@ -12,6 +12,7 @@ async function bootstrap() {
     exclude: [{ path: '/', method: RequestMethod.GET }],
   });
   const configService = app.get(ConfigService);
+  const PORT = process.env.PORT || 3000;
 
   const zodExceptionFilter = new ZodExceptionFilter(configService);
   app.useGlobalFilters(zodExceptionFilter);
@@ -31,6 +32,6 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(PORT);
 }
 bootstrap();
