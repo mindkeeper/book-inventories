@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -26,6 +25,7 @@ model User{
 model Genre{
   id        String   @id @default(cuid())
   name      String   @unique
+  keyName   String   @unique
 
   books     Book[]
   createdAt DateTime @default(now())
