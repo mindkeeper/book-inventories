@@ -34,6 +34,7 @@ export class ZodExceptionFilter implements ExceptionFilter {
         message: error.message,
       })),
       message: 'Validation failed',
+      data: null,
       stack: exception.stack,
     };
 
