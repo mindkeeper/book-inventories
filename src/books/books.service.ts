@@ -17,8 +17,8 @@ export class BooksService {
     if (query.q) {
       conditions.push({
         OR: [
-          { title: { contains: query.q } },
-          { author: { contains: query.q } },
+          { title: { contains: query.q, mode: 'insensitive' } },
+          { author: { contains: query.q, mode: 'insensitive' } },
         ],
       });
     }
