@@ -7,7 +7,11 @@ import { PassportModule } from '@nestjs/passport';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [config] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env.local',
+      load: [config],
+    }),
     TokenModule,
     PassportModule,
   ],

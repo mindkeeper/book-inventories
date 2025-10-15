@@ -1,11 +1,15 @@
-import { NestFactory, Reflector } from '@nestjs/core';
+// we need to import instrument.ts before any other modules.
+import './instrument';
+
+import { HttpAdapterHost, NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import { ZodExceptionFilter } from './exception-filters/zod-exception-filter';
+import { ZodExceptionFilter } from './filters/zod-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { RequestMethod } from '@nestjs/common';
-import { PrismaExceptionFilter } from './exception-filters/prisma-exception-filter';
+import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 import { TransformResponseInterceptor } from './utils/interceptors/response.interceptor';
+import { AllExceptionFilter } from './filters/all-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,13 +19,19 @@ async function bootstrap() {
   });
   const configService = app.get(ConfigService);
   const reflector = app.get(Reflector);
+  const httpAdapterHost = app.get(HttpAdapterHost);
 
   const PORT = process.env.PORT || 3000;
 
   // Exception Filters
+  const allExceptionFilter = new AllExceptionFilter(httpAdapterHost);
   const zodExceptionFilter = new ZodExceptionFilter(configService);
   const prismaExceptionFilter = new PrismaExceptionFilter(configService);
-  app.useGlobalFilters(zodExceptionFilter, prismaExceptionFilter);
+  app.useGlobalFilters(
+    allExceptionFilter,
+    zodExceptionFilter,
+    prismaExceptionFilter,
+  );
 
   // Interceptors
   app.useGlobalInterceptors(new TransformResponseInterceptor(reflector));

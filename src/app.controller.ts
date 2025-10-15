@@ -9,4 +9,9 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  @Get('sentry-test')
+  sentryTest() {
+    throw new Error('Sentry Test Error - This is intentional for testing');
+  }
 }
