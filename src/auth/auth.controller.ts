@@ -1,15 +1,26 @@
-import { Body, Controller, Post, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Request,
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from 'src/utils/pipes/zod-pipe';
 import { type SignUpDto, signUpSchema } from './schema/sign-up.schema';
 import { ApiBody, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SignUpEntity, SignUpResponse } from './entities/sign-up.entity';
-import { type SignInDto, signInSchema } from './schema/sign-in.schema';
+import { signInSchema } from './schema/sign-in.schema';
 import {
   SignInEntity,
   SignInError,
   SignInResponse,
 } from './entities/sign-in.entity';
+import { LocalAuthGuard } from './guards/local.guard';
+import { type TUser } from 'src/utils/decorators/current-user.decoreator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -41,7 +52,11 @@ export class AuthController {
     description: 'Unauthorized. Invalid credentials.',
     type: SignInError,
   })
-  signIn(@Body() signInDto: SignInDto) {
-    return this.authService.signIn(signInDto);
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(LocalAuthGuard)
+  signIn(@Request() request) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const user = request.user as TUser;
+    return this.authService.generateToken(user.email);
   }
 }

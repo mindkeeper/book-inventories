@@ -1,14 +1,9 @@
-import {
-  BadRequestException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { UsersService } from 'src/users/users.service';
-import { SignUpDto } from './schema/sign-up.schema';
-import * as bcrypt from 'bcrypt';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { SignInDto } from './schema/sign-in.schema';
+import * as bcrypt from 'bcrypt';
+import { UsersService } from 'src/users/users.service';
+import { SignUpDto } from './schema/sign-up.schema';
 @Injectable()
 export class AuthService {
   constructor(
@@ -31,19 +26,6 @@ export class AuthService {
     return { access_token: token };
   }
 
-  async signIn(data: SignInDto) {
-    const user = await this.userService.findByEmail(data.email);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-    const isPasswordValid = await bcrypt.compare(data.password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-    const token = await this.generateToken(user.email);
-    return { access_token: token };
-  }
-
   async hashPassword(password: string): Promise<string> {
     const hashedPassword = await bcrypt.hash(password, 10);
     return hashedPassword;
@@ -60,5 +42,19 @@ export class AuthService {
 
   async validateUser(email: string) {
     return this.userService.findByEmail(email);
+  }
+
+  async authenticate(email: string, password: string) {
+    const user = await this.validateUser(email);
+    if (!user) {
+      return null;
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...result } = user;
+    return result;
   }
 }

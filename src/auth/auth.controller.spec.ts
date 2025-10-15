@@ -1,38 +1,33 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { SignUpDto } from './schema/sign-up.schema';
-import { SignInDto } from './schema/sign-in.schema';
+import { TUser } from 'src/utils/decorators/current-user.decoreator';
 
-type SignUpResponse = Awaited<ReturnType<AuthService['signUp']>>;
-type SignInResponse = Awaited<ReturnType<AuthService['signIn']>>;
-
-describe('AuthController (unit)', () => {
+describe('AuthController', () => {
   let controller: AuthController;
-  let service: jest.Mocked<AuthService>;
+  let authService: jest.Mocked<AuthService>;
 
   beforeEach(async () => {
-    const serviceMock: jest.Mocked<AuthService> = {
+    const mockAuthService = {
       signUp: jest.fn(),
-      signIn: jest.fn(),
-      // helpers not directly used by controller
-      hashPassword: jest.fn(),
       generateToken: jest.fn(),
-      validateUser: jest.fn(),
-    } as unknown as jest.Mocked<AuthService>;
+    };
 
-    const moduleRef: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: serviceMock }],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
+      ],
     }).compile();
 
-    controller = moduleRef.get(AuthController);
-    service = moduleRef.get(AuthService);
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
+    controller = module.get<AuthController>(AuthController);
+    authService = module.get(AuthService);
   });
 
   it('should be defined', () => {
@@ -40,58 +35,72 @@ describe('AuthController (unit)', () => {
   });
 
   describe('signUp', () => {
-    it('delegates to AuthService and returns token', async () => {
-      const dto: SignUpDto = {
-        email: 'alice@example.com',
-        password: 'pass123',
+    it('should delegate to authService.signUp and return the result', async () => {
+      const signUpDto: SignUpDto = {
+        email: 'test@example.com',
+        password: 'password123',
       };
-      const expected: SignUpResponse = { access_token: 'token-1' };
-      const signUpSpy = jest
-        .spyOn(service, 'signUp')
-        .mockResolvedValue(expected);
+      const expectedResult = { access_token: 'jwt-token' };
 
-      const result = await controller.signUp(dto);
+      authService.signUp.mockResolvedValue(expectedResult);
 
-      expect(signUpSpy).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(expected);
+      const result = await controller.signUp(signUpDto);
+
+      expect(authService.signUp).toHaveBeenCalledWith(signUpDto);
+      expect(result).toBe(expectedResult);
     });
 
-    it('propagates BadRequestException from service', async () => {
-      const dto: SignUpDto = {
-        email: 'existing@example.com',
-        password: 'pass123',
+    it('should propagate BadRequestException from authService.signUp', async () => {
+      const signUpDto: SignUpDto = {
+        email: 'test@example.com',
+        password: 'password123',
       };
-      const error = new BadRequestException('User already exists');
-      jest.spyOn(service, 'signUp').mockRejectedValue(error);
 
-      await expect(controller.signUp(dto)).rejects.toBeInstanceOf(
+      authService.signUp.mockRejectedValue(
+        new BadRequestException('User already exists'),
+      );
+
+      await expect(controller.signUp(signUpDto)).rejects.toThrow(
         BadRequestException,
       );
+      expect(authService.signUp).toHaveBeenCalledWith(signUpDto);
     });
   });
 
   describe('signIn', () => {
-    it('delegates to AuthService and returns token', async () => {
-      const dto: SignInDto = { email: 'bob@example.com', password: 'secret' };
-      const expected: SignInResponse = { access_token: 'token-2' };
-      const signInSpy = jest
-        .spyOn(service, 'signIn')
-        .mockResolvedValue(expected);
+    it('should generate token for authenticated user', async () => {
+      const user: TUser = {
+        id: 'user-id-123',
+        email: 'test@example.com',
+        name: 'Bob',
+      };
+      const mockRequest = { user };
+      const expectedToken = 'jwt-token';
 
-      const result = await controller.signIn(dto);
+      authService.generateToken.mockResolvedValue(expectedToken);
 
-      expect(signInSpy).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(expected);
+      const result = await controller.signIn(mockRequest);
+
+      expect(authService.generateToken).toHaveBeenCalledWith(user.email);
+      expect(result).toBe(expectedToken);
     });
 
-    it('propagates UnauthorizedException from service', async () => {
-      const dto: SignInDto = { email: 'bob@example.com', password: 'wrong' };
-      const error = new UnauthorizedException('Invalid credentials');
-      jest.spyOn(service, 'signIn').mockRejectedValue(error);
+    it('should propagate errors from authService.generateToken', async () => {
+      const user: TUser = {
+        id: 'user-id-123',
+        email: 'test@example.com',
+        name: 'Bob',
+      };
+      const mockRequest = { user };
 
-      await expect(controller.signIn(dto)).rejects.toBeInstanceOf(
+      authService.generateToken.mockRejectedValue(
+        new UnauthorizedException('Token generation failed'),
+      );
+
+      await expect(controller.signIn(mockRequest)).rejects.toThrow(
         UnauthorizedException,
       );
+      expect(authService.generateToken).toHaveBeenCalledWith(user.email);
     });
   });
 });

@@ -2,7 +2,7 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 
 export type TUser = {
-  id: number;
+  id: string;
   email: string;
   name?: string;
 };

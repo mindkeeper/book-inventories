@@ -21,7 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { BooksQueryDto, SortDirection, SortField } from './dto/query.dto';
 import { BookEntity, BookResponse } from './entities/book.entity';
-import { JwtAuthGuard } from 'src/token/guards/jwt.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
 import { type BookDto } from './schemas/book.schema';
 
 @Controller('books')

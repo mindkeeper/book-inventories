@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from 'src/users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt', () => ({
@@ -64,7 +65,11 @@ describe('AuthService (basic unit tests)', () => {
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-pass');
       const createSpy = jest
         .spyOn(usersService, 'createUser')
-        .mockResolvedValue({ id: '1', email: 'alice@example.com', name: null });
+        .mockResolvedValue({
+          id: 'user-id-123',
+          email: 'alice@example.com',
+          name: null,
+        });
       const signSpy = jest
         .spyOn(jwtService, 'signAsync')
         .mockResolvedValue('token-1');
@@ -91,15 +96,10 @@ describe('AuthService (basic unit tests)', () => {
 
     it('throws BadRequestException if user already exists', async () => {
       usersService.findByEmail.mockResolvedValue({
-        id: '1',
+        id: 'user-id-123',
         email: 'alice@example.com',
         name: null,
         password: 'hashed',
-      } as unknown as {
-        id: string;
-        email: string;
-        name: string | null;
-        password: string;
       });
 
       await expect(
@@ -108,63 +108,116 @@ describe('AuthService (basic unit tests)', () => {
     });
   });
 
-  describe('signIn', () => {
-    it('throws UnauthorizedException if user not found', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-      await expect(
-        service.signIn({ email: 'bob@example.com', password: 'pass' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+  describe('hashPassword', () => {
+    it('hashes password using bcrypt', async () => {
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
+
+      const result = await service.hashPassword('plain-password');
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('plain-password', 10);
+      expect(result).toBe('hashed-password');
     });
+  });
 
-    it('throws UnauthorizedException if password invalid', async () => {
-      usersService.findByEmail.mockResolvedValue({
-        id: '1',
-        email: 'bob@example.com',
-        name: null,
-        password: 'hashed',
-      } as unknown as {
-        id: string;
-        email: string;
-        name: string | null;
-        password: string;
-      });
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-      await expect(
-        service.signIn({ email: 'bob@example.com', password: 'wrong' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
-    });
-
-    it('returns access token if credentials valid', async () => {
-      usersService.findByEmail.mockResolvedValue({
-        id: '1',
-        email: 'bob@example.com',
-        name: null,
-        password: 'hashed',
-      } as unknown as {
-        id: string;
-        email: string;
-        name: string | null;
-        password: string;
-      });
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      const signSpy2 = jest
+  describe('generateToken', () => {
+    it('generates JWT token with email payload', async () => {
+      const signSpy = jest
         .spyOn(jwtService, 'signAsync')
-        .mockResolvedValue('valid-token');
+        .mockResolvedValue('generated-token');
 
-      const result = await service.signIn({
-        email: 'bob@example.com',
-        password: 'secret',
-      });
+      const result = await service.generateToken('user@example.com');
 
-      expect(signSpy2).toHaveBeenCalledWith(
-        { email: 'bob@example.com' },
+      expect(signSpy).toHaveBeenCalledWith(
+        { email: 'user@example.com' },
         {
-          secret: configService.get<string>('JWT_SECRET'),
-          expiresIn: configService.get<string>('JWT_EXPIRATION'),
+          secret: 'test-secret',
+          expiresIn: '1h',
         },
       );
-      expect(result).toEqual({ access_token: 'valid-token' });
+      expect(result).toBe('generated-token');
+    });
+  });
+
+  describe('validateUser', () => {
+    it('returns user if found', async () => {
+      const mockUser = {
+        id: 'user-id-123',
+        email: 'user@example.com',
+        name: 'User',
+        password: 'hashed',
+      };
+      usersService.findByEmail.mockResolvedValue(mockUser);
+
+      const result = await service.validateUser('user@example.com');
+
+      expect(usersService.findByEmail).toHaveBeenCalledWith('user@example.com');
+      expect(result).toEqual(mockUser);
+    });
+
+    it('returns null if user not found', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      const result = await service.validateUser('nonexistent@example.com');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('authenticate', () => {
+    it('returns user without password if credentials are valid', async () => {
+      const mockUser = {
+        id: 'user-id-123',
+        email: 'user@example.com',
+        name: 'User',
+        password: 'hashed-password',
+      };
+      usersService.findByEmail.mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.authenticate(
+        'user@example.com',
+        'plain-password',
+      );
+
+      expect(usersService.findByEmail).toHaveBeenCalledWith('user@example.com');
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        'plain-password',
+        'hashed-password',
+      );
+      expect(result).toEqual({
+        id: 'user-id-123',
+        email: 'user@example.com',
+        name: 'User',
+      });
+    });
+
+    it('returns null if user not found', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      const result = await service.authenticate(
+        'nonexistent@example.com',
+        'password',
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns undefined if password is invalid', async () => {
+      const mockUser = {
+        id: 'user-id-123',
+        email: 'user@example.com',
+        name: 'User',
+        password: 'hashed-password',
+      };
+      usersService.findByEmail.mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      const result = await service.authenticate(
+        'user@example.com',
+        'wrong-password',
+      );
+
+      expect(result).toBeUndefined();
     });
   });
 });
