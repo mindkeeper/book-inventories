@@ -57,6 +57,7 @@ export class AuthController {
   signIn(@Request() request) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const user = request.user as TUser;
-    return this.authService.generateToken(user.email);
+    const token = this.authService.generateToken(user.email);
+    return { access_token: token };
   }
 }

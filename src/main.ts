@@ -10,6 +10,7 @@ import { RequestMethod } from '@nestjs/common';
 import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 import { TransformResponseInterceptor } from './utils/interceptors/response.interceptor';
 import { AllExceptionFilter } from './filters/all-exception.filter';
+import { HttpExceptionFilter } from './filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,10 +28,15 @@ async function bootstrap() {
   const allExceptionFilter = new AllExceptionFilter(httpAdapterHost);
   const zodExceptionFilter = new ZodExceptionFilter(configService);
   const prismaExceptionFilter = new PrismaExceptionFilter(configService);
+  const httpExceptionFilter = new HttpExceptionFilter(
+    configService,
+    httpAdapterHost,
+  );
   app.useGlobalFilters(
     allExceptionFilter,
     zodExceptionFilter,
     prismaExceptionFilter,
+    httpExceptionFilter,
   );
 
   // Interceptors
