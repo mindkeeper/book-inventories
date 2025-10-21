@@ -68,7 +68,7 @@ describe('AuthController', () => {
   });
 
   describe('signIn', () => {
-    it('should generate token for authenticated user and return access_token promise', () => {
+    it('should generate token for authenticated user and return access_token object', async () => {
       const user: TUser = {
         id: 'user-id-123',
         email: 'test@example.com',
@@ -79,28 +79,27 @@ describe('AuthController', () => {
 
       authService.generateToken.mockResolvedValue(expectedToken);
 
-      const result = controller.signIn(mockRequest);
+      const result = await controller.signIn(mockRequest);
 
       expect(authService.generateToken).toHaveBeenCalledWith(user.email);
-      expect(result.access_token).toBeInstanceOf(Promise);
+      expect(result).toEqual({ access_token: expectedToken });
     });
 
-    it('should resolve to correct token value', async () => {
+    it('should handle async token generation properly', async () => {
       const user: TUser = {
         id: 'user-id-123',
         email: 'test@example.com',
         name: 'Bob',
       };
       const mockRequest = { user };
-      const expectedToken = 'jwt-token';
+      const expectedToken = 'another-jwt-token';
 
       authService.generateToken.mockResolvedValue(expectedToken);
 
-      const result = controller.signIn(mockRequest);
-      const resolvedToken = await result.access_token;
+      const result = await controller.signIn(mockRequest);
 
       expect(authService.generateToken).toHaveBeenCalledWith(user.email);
-      expect(resolvedToken).toBe(expectedToken);
+      expect(result).toEqual({ access_token: expectedToken });
     });
   });
 });
