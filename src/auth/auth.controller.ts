@@ -54,10 +54,10 @@ export class AuthController {
   })
   @HttpCode(HttpStatus.OK)
   @UseGuards(LocalAuthGuard)
-  signIn(@Request() request) {
+  async signIn(@Request() request) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const user = request.user as TUser;
-    const token = this.authService.generateToken(user.email);
+    const token = await this.authService.generateToken(user.email);
     return { access_token: token };
   }
 }
