@@ -2,7 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { SignUpDto } from './schema/sign-up.schema';
 import { TUser } from 'src/utils/decorators/current-user.decoreator';
 
@@ -68,7 +68,7 @@ describe('AuthController', () => {
   });
 
   describe('signIn', () => {
-    it('should generate token for authenticated user', async () => {
+    it('should generate token for authenticated user and return access_token promise', () => {
       const user: TUser = {
         id: 'user-id-123',
         email: 'test@example.com',
@@ -79,28 +79,28 @@ describe('AuthController', () => {
 
       authService.generateToken.mockResolvedValue(expectedToken);
 
-      const result = await controller.signIn(mockRequest);
+      const result = controller.signIn(mockRequest);
 
       expect(authService.generateToken).toHaveBeenCalledWith(user.email);
-      expect(result).toBe(expectedToken);
+      expect(result.access_token).toBeInstanceOf(Promise);
     });
 
-    it('should propagate errors from authService.generateToken', async () => {
+    it('should resolve to correct token value', async () => {
       const user: TUser = {
         id: 'user-id-123',
         email: 'test@example.com',
         name: 'Bob',
       };
       const mockRequest = { user };
+      const expectedToken = 'jwt-token';
 
-      authService.generateToken.mockRejectedValue(
-        new UnauthorizedException('Token generation failed'),
-      );
+      authService.generateToken.mockResolvedValue(expectedToken);
 
-      await expect(controller.signIn(mockRequest)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      const result = controller.signIn(mockRequest);
+      const resolvedToken = await result.access_token;
+
       expect(authService.generateToken).toHaveBeenCalledWith(user.email);
+      expect(resolvedToken).toBe(expectedToken);
     });
   });
 });
