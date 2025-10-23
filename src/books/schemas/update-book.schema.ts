@@ -4,7 +4,7 @@ export const UpdateBookSchema = z
   .object({
     title: z.string().min(1, { message: 'Title is required' }).optional(),
     author: z.string().min(1, { message: 'Author is required' }).optional(),
-    published: z
+    published: z.coerce
       .number()
       .int()
       .min(1, { message: 'Published year is required' })
