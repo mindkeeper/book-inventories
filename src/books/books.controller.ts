@@ -25,11 +25,13 @@ import {
 import { BooksQueryDto, SortDirection, SortField } from './dto/query.dto';
 import { BookEntity, BookResponse } from './entities/book.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
-import { type BookDto, BookSchema } from './schemas/book.schema';
 import {
-  UpdateBookSchema,
-  type UpdateBookDto,
-} from './schemas/update-book.schema';
+  type BookDto,
+  BookSchema,
+  type BookUpdateDto,
+  BookUpdateSchema,
+} from './schemas/book.schema';
+
 import { ZodValidationPipe } from 'src/utils/pipes/zod-pipe';
 
 @Controller('books')
@@ -99,14 +101,16 @@ export class BooksController {
   }
 
   @Patch(':id')
-  @UsePipes(new ZodValidationPipe(UpdateBookSchema))
   @ApiParam({ name: 'id', required: true, description: 'Book ID' })
   @ApiBody({ type: BookEntity })
   @ApiResponse({ status: 200, description: 'Book updated', type: BookResponse })
   @ApiResponse({ status: 400, description: 'Invalid book data' })
   @ApiResponse({ status: 404, description: 'Book not found' })
-  update(@Param('id') id: string, @Body() updateBookDto: UpdateBookDto) {
-    return this.booksService.update(id, updateBookDto);
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(BookUpdateSchema)) bookDto: BookUpdateDto,
+  ) {
+    return this.booksService.update(id, bookDto);
   }
 
   @Delete(':id')

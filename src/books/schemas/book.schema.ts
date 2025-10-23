@@ -10,4 +10,7 @@ export const BookSchema = z.object({
   genreId: z.string().min(1, { message: 'Genre ID is required' }),
 });
 
+export const BookUpdateSchema = BookSchema.partial();
+
 export type BookDto = z.infer<typeof BookSchema>;
+export type BookUpdateDto = z.infer<typeof BookUpdateSchema>;
