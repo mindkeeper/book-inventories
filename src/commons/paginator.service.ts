@@ -7,6 +7,6 @@ export class PaginatorService {
     page: 1,
     perPage: 10,
     sortField: 'createdAt',
-    sortDirection: 'desc',
+    sortDirection: 'asc',
   });
 }
