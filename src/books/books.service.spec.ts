@@ -7,6 +7,7 @@ import { PaginatorService } from 'src/commons/paginator.service';
 import { NotFoundException } from '@nestjs/common';
 import { BooksQueryDto, SortField, SortDirection } from './dto/query.dto';
 import { type BookDto } from './schemas/book.schema';
+import { type UpdateBookDto } from './schemas/update-book.schema';
 // Use shallow jest.Mocked types; cast nested Prisma delegate methods to jest.Mock when setting return values
 
 describe('BooksService (unit)', () => {
@@ -19,6 +20,7 @@ describe('BooksService (unit)', () => {
       book: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
         delete: jest.fn(),
       },
     } as unknown as jest.Mocked<PrismaService>;
@@ -190,6 +192,141 @@ describe('BooksService (unit)', () => {
         }),
       );
       expect(result).toEqual(created);
+    });
+  });
+
+  describe('update', () => {
+    it('updates an existing book with partial data', async () => {
+      const existing = {
+        id: 'b1',
+        title: 'Original Title',
+        author: 'Original Author',
+        published: 2020,
+        genre: { name: 'Fiction', id: 'g1' },
+      };
+      const updateDto: UpdateBookDto = {
+        title: 'Updated Title',
+        author: 'Updated Author',
+      };
+      const updated = {
+        id: 'b1',
+        title: 'Updated Title',
+        author: 'Updated Author',
+        published: 2020,
+        genre: { name: 'Fiction' },
+      };
+
+      (prisma.book.findUnique as unknown as jest.Mock).mockResolvedValue(
+        existing,
+      );
+      (prisma.book.update as unknown as jest.Mock).mockResolvedValue(updated);
+
+      const result = await service.update('b1', updateDto);
+
+      expect(prisma.book.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b1' },
+          data: {
+            title: 'Updated Title',
+            author: 'Updated Author',
+          },
+        }),
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it('updates an existing book with all fields', async () => {
+      const existing = {
+        id: 'b2',
+        title: 'Original Title',
+        author: 'Original Author',
+        published: 2020,
+        genre: { name: 'Fiction', id: 'g1' },
+      };
+      const updateDto: UpdateBookDto = {
+        title: 'New Title',
+        author: 'New Author',
+        published: 2024,
+        genreId: 'g2',
+      };
+      const updated = {
+        id: 'b2',
+        title: 'New Title',
+        author: 'New Author',
+        published: 2024,
+        genre: { name: 'Non-Fiction' },
+      };
+
+      (prisma.book.findUnique as unknown as jest.Mock).mockResolvedValue(
+        existing,
+      );
+      (prisma.book.update as unknown as jest.Mock).mockResolvedValue(updated);
+
+      const result = await service.update('b2', updateDto);
+
+      expect(prisma.book.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b2' },
+          data: {
+            title: 'New Title',
+            author: 'New Author',
+            published: 2024,
+            genreId: 'g2',
+          },
+        }),
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it('throws NotFoundException when updating a missing book', async () => {
+      const updateDto: UpdateBookDto = {
+        title: 'Updated Title',
+      };
+
+      (prisma.book.findUnique as unknown as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.update('missing-id', updateDto),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(prisma.book.update).not.toHaveBeenCalled();
+    });
+
+    it('updates book with only genreId', async () => {
+      const existing = {
+        id: 'b3',
+        title: 'Book Title',
+        author: 'Book Author',
+        published: 2021,
+        genre: { name: 'Fiction', id: 'g1' },
+      };
+      const updateDto: UpdateBookDto = {
+        genreId: 'g3',
+      };
+      const updated = {
+        id: 'b3',
+        title: 'Book Title',
+        author: 'Book Author',
+        published: 2021,
+        genre: { name: 'Mystery' },
+      };
+
+      (prisma.book.findUnique as unknown as jest.Mock).mockResolvedValue(
+        existing,
+      );
+      (prisma.book.update as unknown as jest.Mock).mockResolvedValue(updated);
+
+      const result = await service.update('b3', updateDto);
+
+      expect(prisma.book.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b3' },
+          data: {
+            genreId: 'g3',
+          },
+        }),
+      );
+      expect(result).toEqual(updated);
     });
   });
 
