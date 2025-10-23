@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   UseGuards,
+  UsePipes,
 } from '@nestjs/common';
 import { BooksService } from './books.service';
 import {
@@ -24,8 +25,12 @@ import {
 import { BooksQueryDto, SortDirection, SortField } from './dto/query.dto';
 import { BookEntity, BookResponse } from './entities/book.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
-import { type BookDto } from './schemas/book.schema';
-import { type UpdateBookDto } from './schemas/update-book.schema';
+import { type BookDto, BookSchema } from './schemas/book.schema';
+import {
+  UpdateBookSchema,
+  type UpdateBookDto,
+} from './schemas/update-book.schema';
+import { ZodValidationPipe } from 'src/utils/pipes/zod-pipe';
 
 @Controller('books')
 @ApiTags('books')
@@ -84,7 +89,7 @@ export class BooksController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UsePipes(new ZodValidationPipe(BookSchema))
   @HttpCode(201)
   @ApiBody({ type: BookEntity })
   @ApiResponse({ status: 201, description: 'Book created', type: BookResponse })
@@ -94,6 +99,7 @@ export class BooksController {
   }
 
   @Patch(':id')
+  @UsePipes(new ZodValidationPipe(UpdateBookSchema))
   @ApiParam({ name: 'id', required: true, description: 'Book ID' })
   @ApiBody({ type: BookEntity })
   @ApiResponse({ status: 200, description: 'Book updated', type: BookResponse })
