@@ -4,12 +4,14 @@ import { BooksService } from './books.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SortDirection, SortField } from './dto/query.dto';
 import { type BookDto } from './schemas/book.schema';
+import { type UpdateBookDto } from './schemas/update-book.schema';
 import { PrismaService } from 'src/commons/prisma.service';
 import { PaginatorService } from 'src/commons/paginator.service';
 
 type FindAllResponse = Awaited<ReturnType<BooksService['findAll']>>;
 type FindOneResponse = Awaited<ReturnType<BooksService['findOne']>>;
 type CreateResponse = Awaited<ReturnType<BooksService['create']>>;
+type UpdateResponse = Awaited<ReturnType<BooksService['update']>>;
 type DeleteResponse = Awaited<ReturnType<BooksService['delete']>>;
 
 describe('BooksController (unit)', () => {
@@ -163,6 +165,78 @@ describe('BooksController (unit)', () => {
       jest.spyOn(service, 'create').mockRejectedValue(error);
 
       await expect(controller.create(dto)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('delegates to BooksService and returns updated book', async () => {
+      const id = 'b1';
+      const dto: UpdateBookDto = {
+        title: 'Updated Title',
+        author: 'Updated Author',
+      };
+      const expected: UpdateResponse = {
+        id: 'b1',
+        title: 'Updated Title',
+        author: 'Updated Author',
+        published: 2020,
+        genre: { name: 'Fiction' },
+      };
+      const spy = jest.spyOn(service, 'update').mockResolvedValue(expected);
+
+      const result = await controller.update(id, dto);
+
+      expect(spy).toHaveBeenCalledWith(id, dto);
+      expect(result).toEqual(expected);
+    });
+
+    it('delegates to BooksService with all fields', async () => {
+      const id = 'b2';
+      const dto: UpdateBookDto = {
+        title: 'New Title',
+        author: 'New Author',
+        published: 2024,
+        genreId: 'g2',
+      };
+      const expected: UpdateResponse = {
+        id: 'b2',
+        title: 'New Title',
+        author: 'New Author',
+        published: 2024,
+        genre: { name: 'Non-Fiction' },
+      };
+      const spy = jest.spyOn(service, 'update').mockResolvedValue(expected);
+
+      const result = await controller.update(id, dto);
+
+      expect(spy).toHaveBeenCalledWith(id, dto);
+      expect(result).toEqual(expected);
+    });
+
+    it('propagates NotFoundException from service', async () => {
+      const id = 'missing';
+      const dto: UpdateBookDto = {
+        title: 'Updated Title',
+      };
+      const error = new NotFoundException('Book not found');
+      jest.spyOn(service, 'update').mockRejectedValue(error);
+
+      await expect(controller.update(id, dto)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('propagates BadRequestException from service', async () => {
+      const id = 'b1';
+      const dto: UpdateBookDto = {
+        title: '',
+      };
+      const error = new BadRequestException('Invalid book data');
+      jest.spyOn(service, 'update').mockRejectedValue(error);
+
+      await expect(controller.update(id, dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });

@@ -3,6 +3,7 @@ import { PaginatorService } from 'src/commons/paginator.service';
 import { PrismaService } from 'src/commons/prisma.service';
 import { BooksQueryDto, SortField } from './dto/query.dto';
 import { BookDto } from './schemas/book.schema';
+import { UpdateBookDto } from './schemas/update-book.schema';
 
 @Injectable()
 export class BooksService {
@@ -102,6 +103,34 @@ export class BooksService {
     });
     return book;
   }
+
+  async update(id: string, updateBookDto: UpdateBookDto) {
+    // First check if the book exists
+    await this.findOne(id);
+
+    const book = await this.prismaService.book.update({
+      where: { id: id },
+      data: {
+        ...(updateBookDto.title && { title: updateBookDto.title }),
+        ...(updateBookDto.author && { author: updateBookDto.author }),
+        ...(updateBookDto.published && { published: updateBookDto.published }),
+        ...(updateBookDto.genreId && { genreId: updateBookDto.genreId }),
+      },
+      select: {
+        id: true,
+        title: true,
+        author: true,
+        published: true,
+        genre: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+    return book;
+  }
+
   async delete(id: string) {
     const book = await this.findOne(id);
     if (!book) {

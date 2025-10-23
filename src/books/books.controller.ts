@@ -7,6 +7,7 @@ import {
   Param,
   ParseEnumPipe,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -15,6 +16,7 @@ import { BooksService } from './books.service';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -23,15 +25,16 @@ import { BooksQueryDto, SortDirection, SortField } from './dto/query.dto';
 import { BookEntity, BookResponse } from './entities/book.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
 import { type BookDto } from './schemas/book.schema';
+import { type UpdateBookDto } from './schemas/update-book.schema';
 
 @Controller('books')
 @ApiTags('books')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 export class BooksController {
   constructor(private readonly booksService: BooksService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
   @ApiQuery({ name: 'page', required: false, default: 1 })
   @ApiQuery({ name: 'perPage', required: false, default: 10 })
   @ApiQuery({ name: 'genre', required: false })
@@ -73,8 +76,7 @@ export class BooksController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiQuery({ name: 'id', required: true })
+  @ApiParam({ name: 'id', required: true, description: 'Book ID' })
   @ApiResponse({ status: 200, description: 'Book found', type: BookResponse })
   @ApiResponse({ status: 404, description: 'Book not found' })
   findOne(@Param('id') id: string) {
@@ -91,9 +93,18 @@ export class BooksController {
     return this.booksService.create(bookDto);
   }
 
+  @Patch(':id')
+  @ApiParam({ name: 'id', required: true, description: 'Book ID' })
+  @ApiBody({ type: BookEntity })
+  @ApiResponse({ status: 200, description: 'Book updated', type: BookResponse })
+  @ApiResponse({ status: 400, description: 'Invalid book data' })
+  @ApiResponse({ status: 404, description: 'Book not found' })
+  update(@Param('id') id: string, @Body() updateBookDto: UpdateBookDto) {
+    return this.booksService.update(id, updateBookDto);
+  }
+
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiQuery({ name: 'id', required: true })
+  @ApiParam({ name: 'id', required: true, description: 'Book ID' })
   @ApiResponse({ status: 200, description: 'Book deleted', type: BookResponse })
   @ApiResponse({ status: 404, description: 'Book not found' })
   delete(@Param('id') id: string) {
