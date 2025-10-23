@@ -7,7 +7,7 @@ import { PaginatorService } from 'src/commons/paginator.service';
 import { NotFoundException } from '@nestjs/common';
 import { BooksQueryDto, SortField, SortDirection } from './dto/query.dto';
 import { type BookDto } from './schemas/book.schema';
-import { type UpdateBookDto } from './schemas/update-book.schema';
+import { type BookUpdateDto } from './schemas/book.schema';
 // Use shallow jest.Mocked types; cast nested Prisma delegate methods to jest.Mock when setting return values
 
 describe('BooksService (unit)', () => {
@@ -204,7 +204,7 @@ describe('BooksService (unit)', () => {
         published: 2020,
         genre: { name: 'Fiction', id: 'g1' },
       };
-      const updateDto: UpdateBookDto = {
+      const updateDto: BookUpdateDto = {
         title: 'Updated Title',
         author: 'Updated Author',
       };
@@ -243,7 +243,7 @@ describe('BooksService (unit)', () => {
         published: 2020,
         genre: { name: 'Fiction', id: 'g1' },
       };
-      const updateDto: UpdateBookDto = {
+      const updateDto: BookUpdateDto = {
         title: 'New Title',
         author: 'New Author',
         published: 2024,
@@ -279,7 +279,7 @@ describe('BooksService (unit)', () => {
     });
 
     it('throws NotFoundException when updating a missing book', async () => {
-      const updateDto: UpdateBookDto = {
+      const updateDto: BookUpdateDto = {
         title: 'Updated Title',
       };
 
@@ -300,7 +300,7 @@ describe('BooksService (unit)', () => {
         published: 2021,
         genre: { name: 'Fiction', id: 'g1' },
       };
-      const updateDto: UpdateBookDto = {
+      const updateDto: BookUpdateDto = {
         genreId: 'g3',
       };
       const updated = {

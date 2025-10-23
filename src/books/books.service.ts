@@ -2,8 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaginatorService } from 'src/commons/paginator.service';
 import { PrismaService } from 'src/commons/prisma.service';
 import { BooksQueryDto, SortField } from './dto/query.dto';
-import { BookDto } from './schemas/book.schema';
-import { UpdateBookDto } from './schemas/update-book.schema';
+import { BookDto, BookUpdateDto } from './schemas/book.schema';
 
 @Injectable()
 export class BooksService {
@@ -104,18 +103,27 @@ export class BooksService {
     return book;
   }
 
-  async update(id: string, updateBookDto: UpdateBookDto) {
+  async update(id: string, bookDto: BookUpdateDto) {
     // First check if the book exists
     await this.findOne(id);
 
+    // Filter out undefined values to only update provided fields
+    const updateData: Partial<{
+      title: string;
+      author: string;
+      published: number;
+      genreId: string;
+    }> = {};
+
+    if (bookDto.title !== undefined) updateData.title = bookDto.title;
+    if (bookDto.author !== undefined) updateData.author = bookDto.author;
+    if (bookDto.published !== undefined)
+      updateData.published = bookDto.published;
+    if (bookDto.genreId !== undefined) updateData.genreId = bookDto.genreId;
+
     const book = await this.prismaService.book.update({
       where: { id: id },
-      data: {
-        ...(updateBookDto.title && { title: updateBookDto.title }),
-        ...(updateBookDto.author && { author: updateBookDto.author }),
-        ...(updateBookDto.published && { published: updateBookDto.published }),
-        ...(updateBookDto.genreId && { genreId: updateBookDto.genreId }),
-      },
+      data: updateData,
       select: {
         id: true,
         title: true,

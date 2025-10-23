@@ -4,7 +4,7 @@ import { BooksService } from './books.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SortDirection, SortField } from './dto/query.dto';
 import { type BookDto } from './schemas/book.schema';
-import { type UpdateBookDto } from './schemas/update-book.schema';
+import { type BookUpdateDto } from './schemas/book.schema';
 import { PrismaService } from 'src/commons/prisma.service';
 import { PaginatorService } from 'src/commons/paginator.service';
 
@@ -173,7 +173,7 @@ describe('BooksController (unit)', () => {
   describe('update', () => {
     it('delegates to BooksService and returns updated book', async () => {
       const id = 'b1';
-      const dto: UpdateBookDto = {
+      const dto: BookUpdateDto = {
         title: 'Updated Title',
         author: 'Updated Author',
       };
@@ -194,7 +194,7 @@ describe('BooksController (unit)', () => {
 
     it('delegates to BooksService with all fields', async () => {
       const id = 'b2';
-      const dto: UpdateBookDto = {
+      const dto: BookUpdateDto = {
         title: 'New Title',
         author: 'New Author',
         published: 2024,
@@ -217,7 +217,7 @@ describe('BooksController (unit)', () => {
 
     it('propagates NotFoundException from service', async () => {
       const id = 'missing';
-      const dto: UpdateBookDto = {
+      const dto: BookUpdateDto = {
         title: 'Updated Title',
       };
       const error = new NotFoundException('Book not found');
@@ -230,7 +230,7 @@ describe('BooksController (unit)', () => {
 
     it('propagates BadRequestException from service', async () => {
       const id = 'b1';
-      const dto: UpdateBookDto = {
+      const dto: BookUpdateDto = {
         title: '',
       };
       const error = new BadRequestException('Invalid book data');
