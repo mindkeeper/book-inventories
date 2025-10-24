@@ -11,7 +11,7 @@ import { Request, Response } from 'express';
 
 export interface IResponse<T> {
   status: boolean;
-  tiemstamp: string;
+  timestamp: string;
   path: string;
   statusCode: number;
   message: string | { [key: string]: string }[];
@@ -36,7 +36,7 @@ export class TransformResponseInterceptor<T>
     return next.handle().pipe(
       map((data) => ({
         status: true,
-        tiemstamp: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
         path: request.url,
         statusCode: response.statusCode,
         message,
