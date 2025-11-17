@@ -53,7 +53,7 @@ export class BooksService {
           },
         },
       },
-      { page: query.page, perPage: query.perPage },
+      { page: query.page, limit: query.perPage },
     );
     return { data, meta };
   }

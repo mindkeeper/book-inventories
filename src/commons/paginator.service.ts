@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { paginator, TPaginateFunction } from 'src/utils/paginator/paginator';
+import { IPaginateFunction, paginator } from 'src/utils/paginator/paginator';
 
 @Injectable()
 export class PaginatorService {
-  paginate: TPaginateFunction = paginator({
+  paginate: IPaginateFunction = paginator({
     page: 1,
-    perPage: 10,
+    limit: 10,
     sortField: 'createdAt',
-    sortDirection: 'asc',
+    sortOrder: 'desc',
   });
 }
