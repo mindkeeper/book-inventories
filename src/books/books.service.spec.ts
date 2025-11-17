@@ -72,12 +72,12 @@ describe('BooksService (unit)', () => {
           },
         ],
         meta: {
-          total: 11,
-          currentPage: 2,
-          perPage: 5,
-          totalPages: 3,
-          previousPage: 1,
-          nextPage: 3,
+          pagination: {
+            page: 2,
+            limit: 5,
+            total: 11,
+            totalPages: 3,
+          },
         },
       };
 
@@ -120,7 +120,7 @@ describe('BooksService (unit)', () => {
             // genre select is present in service; we don't require it here, but keep matcher permissive
           }),
         }),
-        { page: 2, perPage: 5 },
+        { page: 2, limit: 5 },
       );
 
       // Additional focused assertion on the actual args to keep intent strong
