@@ -22,7 +22,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { BooksQueryDto, SortDirection, SortField } from './dto/query.dto';
+import {
+  BooksQueryDto,
+  BooksCursorQueryDto,
+  SortDirection,
+  SortField,
+} from './dto/query.dto';
 import { BookEntity, BookResponse } from './entities/book.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
 import {
@@ -80,6 +85,47 @@ export class BooksController {
       sortDirection,
     };
     return this.booksService.findAll(query);
+  }
+
+  @Get('cursor')
+  @ApiQuery({ name: 'cursor', required: false })
+  @ApiQuery({ name: 'limit', required: false, default: 10 })
+  @ApiQuery({ name: 'genre', required: false })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    enum: SortDirection,
+    default: SortDirection.DESC,
+  })
+  @ApiQuery({
+    name: 'sortField',
+    required: false,
+    enum: SortField,
+    default: SortField.CREATED_AT,
+  })
+  findAllCursor(
+    @Query('cursor') cursor?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('genre') genre?: string,
+    @Query('q') q?: string,
+    @Query('sortField', new ParseEnumPipe(SortField, { optional: true }))
+    sortField?: SortField,
+    @Query(
+      'sortDirection',
+      new ParseEnumPipe(SortDirection, { optional: true }),
+    )
+    sortDirection?: SortDirection,
+  ) {
+    const query: BooksCursorQueryDto = {
+      cursor,
+      limit,
+      genre,
+      q,
+      sortField,
+      sortDirection,
+    };
+    return this.booksService.findAllCursor(query);
   }
 
   @Get(':id')
