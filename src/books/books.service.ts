@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaginatorService } from 'src/commons/paginator.service';
 import { PrismaService } from 'src/commons/prisma.service';
-import { BooksQueryDto, SortField } from './dto/query.dto';
+import { BooksQueryDto, BooksCursorQueryDto, SortField } from './dto/query.dto';
 import { BookDto, BookUpdateDto } from './schemas/book.schema';
 
 @Injectable()
@@ -57,6 +57,58 @@ export class BooksService {
     );
     return { data, meta };
   }
+
+  /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+  async findAllCursor(queryParams: BooksCursorQueryDto) {
+    const conditions: any[] = [];
+
+    if (queryParams.q) {
+      conditions.push({
+        OR: [
+          { title: { contains: queryParams.q, mode: 'insensitive' } },
+          { author: { contains: queryParams.q, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (queryParams.genre) {
+      conditions.push({
+        genre: {
+          is: {
+            keyName: queryParams.genre,
+          },
+        },
+      });
+    }
+
+    const { data, meta } = await this.paginator.cursorPaginate(
+      this.prismaService.book,
+      {
+        where: {
+          AND: conditions,
+        },
+        select: {
+          id: true,
+          title: true,
+          author: true,
+          published: true,
+          createdAt: true,
+          genre: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      {
+        cursor: queryParams.cursor,
+        limit: queryParams.limit,
+        sortField: queryParams.sortField || SortField.CREATED_AT,
+        sortOrder: queryParams.sortDirection,
+      },
+    );
+    return { data, meta };
+  }
+  /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 
   async findOne(id: string) {
     const book = await this.prismaService.book.findUnique({

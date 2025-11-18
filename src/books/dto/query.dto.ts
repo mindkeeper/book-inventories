@@ -18,3 +18,12 @@ export type BooksQueryDto = {
   sortDirection?: SortDirection;
   sortField?: string;
 };
+
+export interface BooksCursorQueryDto {
+  cursor?: string;
+  limit?: number;
+  genre?: string;
+  q?: string;
+  sortDirection?: SortDirection;
+  sortField?: string;
+}
