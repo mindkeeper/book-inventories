@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PaginatorService } from './paginator.service';
 import { IPaginatedResult } from 'src/utils/paginator/paginator';
+import { ICursorPaginatedResult } from 'src/utils/paginator/cursor.paginator';
 
 describe('PaginatorService', () => {
   let service: PaginatorService;
@@ -439,6 +440,490 @@ describe('PaginatorService', () => {
         // If they were sequential, the difference would be at least 10ms
         const timeDifference = Math.abs(findManyCallTime - countCallTime);
         expect(timeDifference).toBeLessThan(5); // Allow small margin
+      });
+    });
+  });
+
+  describe('cursorPaginate function', () => {
+    // Mock Prisma model for cursor pagination testing
+    const createMockModelForCursor = (data: any[]) => ({
+      findMany: jest.fn().mockResolvedValue(data),
+    });
+
+    // Helper to encode cursor
+    const encodeCursor = (
+      id: string,
+      sortValue: string | number | Date,
+    ): string => {
+      return Buffer.from(JSON.stringify({ id, sortValue })).toString('base64');
+    };
+
+    describe('initialization and default options', () => {
+      it('should initialize with default cursor pagination options', () => {
+        expect(service.cursorPaginate).toBeDefined();
+        expect(typeof service.cursorPaginate).toBe('function');
+      });
+
+      it('should use default options when no options provided', async () => {
+        const mockData = [
+          { id: 'id1', name: 'Item 1', createdAt: new Date('2024-01-03') },
+          { id: 'id2', name: 'Item 2', createdAt: new Date('2024-01-02') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(mockModel, {}, {});
+
+        // Verify findMany was called with default options
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11, // limit + 1 to check for next page
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+
+        expect(result.meta.pagination).toEqual({
+          limit: 10,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          nextCursor: null,
+          previousCursor: null,
+        });
+      });
+    });
+
+    describe('first page retrieval', () => {
+      it('should retrieve first page without cursor', async () => {
+        const mockData = Array.from({ length: 10 }, (_, i) => ({
+          id: `id${i + 1}`,
+          name: `Item ${i + 1}`,
+          createdAt: new Date(`2024-01-${10 - i}`),
+        }));
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(mockModel, {}, {});
+
+        expect(result.data).toHaveLength(10);
+        expect(result.meta.pagination.hasNextPage).toBe(false);
+        expect(result.meta.pagination.hasPreviousPage).toBe(false);
+        expect(result.meta.pagination.nextCursor).toBeNull();
+        expect(result.meta.pagination.previousCursor).toBeNull();
+      });
+
+      it('should set hasNextPage to true when more data exists', async () => {
+        const mockData = Array.from({ length: 11 }, (_, i) => ({
+          id: `id${i + 1}`,
+          name: `Item ${i + 1}`,
+          createdAt: new Date(`2024-01-${20 - i}`),
+        }));
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: 10 },
+        );
+
+        expect(result.data).toHaveLength(10);
+        expect(result.meta.pagination.hasNextPage).toBe(true);
+        expect(result.meta.pagination.nextCursor).not.toBeNull();
+      });
+    });
+
+    describe('cursor-based navigation', () => {
+      it('should use cursor to fetch next page', async () => {
+        const cursor = encodeCursor('id5', new Date('2024-01-05'));
+        const mockData = [
+          { id: 'id6', name: 'Item 6', createdAt: new Date('2024-01-04') },
+          { id: 'id7', name: 'Item 7', createdAt: new Date('2024-01-03') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { cursor, limit: 5 },
+        );
+
+        // Verify that findMany was called with cursor-based where clause
+        expect(mockModel.findMany).toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const callArgs = mockModel.findMany.mock.calls[0][0];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(callArgs.where).toBeDefined();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(callArgs.take).toBe(6); // limit + 1
+
+        expect(result.meta.pagination.hasPreviousPage).toBe(true);
+      });
+
+      it('should generate correct nextCursor from last item', async () => {
+        const mockData = Array.from({ length: 11 }, (_, i) => ({
+          id: `id${i + 1}`,
+          name: `Item ${i + 1}`,
+          createdAt: new Date(`2024-01-${20 - i}`),
+        }));
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: 10 },
+        );
+
+        expect(result.meta.pagination.nextCursor).not.toBeNull();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const decoded = JSON.parse(
+          Buffer.from(result.meta.pagination.nextCursor!, 'base64').toString(
+            'utf-8',
+          ),
+        );
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(decoded.id).toBe('id10');
+      });
+
+      it('should generate previousCursor from first item when cursor provided', async () => {
+        const cursor = encodeCursor('id5', new Date('2024-01-05'));
+        const mockData = [
+          { id: 'id6', name: 'Item 6', createdAt: new Date('2024-01-04') },
+          { id: 'id7', name: 'Item 7', createdAt: new Date('2024-01-03') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { cursor, limit: 5 },
+        );
+
+        expect(result.meta.pagination.previousCursor).not.toBeNull();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const decoded = JSON.parse(
+          Buffer.from(
+            result.meta.pagination.previousCursor!,
+            'base64',
+          ).toString('utf-8'),
+        );
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(decoded.id).toBe('id6');
+      });
+    });
+
+    describe('pagination options', () => {
+      it('should override default limit option', async () => {
+        const mockData = Array.from({ length: 5 }, (_, i) => ({
+          id: `id${i + 1}`,
+          name: `Item ${i + 1}`,
+        }));
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: 5 },
+        );
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 6, // limit + 1
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+
+        expect(result.meta.pagination.limit).toBe(5);
+      });
+
+      it('should override default sortField option', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1', updatedAt: new Date() }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(mockModel, {}, { sortField: 'updatedAt' });
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+
+      it('should override default sortOrder option', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1', createdAt: new Date() }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(mockModel, {}, { sortOrder: 'asc' });
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+      });
+
+      it('should apply multiple custom options simultaneously', async () => {
+        const mockData = [
+          { id: 'id1', name: 'Item 1', updatedAt: new Date('2024-01-01') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(
+          mockModel,
+          {},
+          {
+            limit: 20,
+            sortField: 'updatedAt',
+            sortOrder: 'asc',
+          },
+        );
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 21,
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        });
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle limit 0 by converting to limit 1', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: 0 },
+        );
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 2, // 1 + 1
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+
+        expect(result.meta.pagination.limit).toBe(1);
+      });
+
+      it('should handle negative limit by converting to limit 1', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: -10 },
+        );
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 2,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+
+        expect(result.meta.pagination.limit).toBe(1);
+      });
+
+      it('should handle empty result set', async () => {
+        const mockModel = createMockModelForCursor([]);
+
+        const result = await service.cursorPaginate(mockModel, {}, {});
+
+        expect(result.data).toEqual([]);
+        expect(result.meta.pagination).toEqual({
+          limit: 10,
+          hasNextPage: false,
+          hasPreviousPage: false,
+          nextCursor: null,
+          previousCursor: null,
+        });
+      });
+
+      it('should throw error for invalid cursor format', async () => {
+        const mockModel = createMockModelForCursor([]);
+
+        await expect(
+          service.cursorPaginate(mockModel, {}, { cursor: 'invalid-cursor' }),
+        ).rejects.toThrow('Invalid cursor format');
+      });
+
+      it('should handle malformed base64 cursor', async () => {
+        const mockModel = createMockModelForCursor([]);
+
+        await expect(
+          service.cursorPaginate(mockModel, {}, { cursor: '!!invalid!!' }),
+        ).rejects.toThrow();
+      });
+    });
+
+    describe('query args integration', () => {
+      it('should pass where clause to findMany', async () => {
+        const mockData = [{ id: 'id1', name: 'Active Item', status: 'active' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const args = {
+          where: { status: 'active' },
+        };
+
+        await service.cursorPaginate(mockModel, args, { limit: 10 });
+
+        // When no cursor is provided, where should not be in the query
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          where: { status: 'active' },
+          take: 11,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+
+      it('should merge where clause with cursor conditions', async () => {
+        const cursor = encodeCursor('id5', new Date('2024-01-05'));
+        const mockData = [{ id: 'id6', name: 'Item 6', status: 'active' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const args = {
+          where: { status: 'active' },
+        };
+
+        await service.cursorPaginate(mockModel, args, { cursor, limit: 10 });
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const callArgs = mockModel.findMany.mock.calls[0][0];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(callArgs.where.AND).toBeDefined();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        expect(callArgs.where.AND).toHaveLength(2);
+      });
+
+      it('should pass include clause to findMany', async () => {
+        const mockData = [
+          {
+            id: 'id1',
+            name: 'User 1',
+            posts: [{ id: 'post1', title: 'Post 1' }],
+          },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const args = {
+          where: { active: true },
+          include: { posts: true },
+        };
+
+        await service.cursorPaginate(mockModel, args, {});
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          where: { active: true },
+          include: { posts: true },
+          take: 11,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+
+      it('should handle complex query args with select', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const args = {
+          where: { status: 'active', deleted: false },
+          select: { id: true, name: true, createdAt: true },
+        };
+
+        await service.cursorPaginate(mockModel, args, {});
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          where: { status: 'active', deleted: false },
+          select: { id: true, name: true, createdAt: true },
+          take: 11,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+
+      it('should handle empty args object', async () => {
+        const mockData = [{ id: 'id1' }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(mockModel, {}, {});
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+    });
+
+    describe('sorting behavior', () => {
+      it('should sort descending by default', async () => {
+        const mockData = [
+          { id: 'id1', name: 'Item 1', createdAt: new Date('2024-01-03') },
+          { id: 'id2', name: 'Item 2', createdAt: new Date('2024-01-02') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(mockModel, {}, {});
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+      });
+
+      it('should use compound sorting (sortField + id)', async () => {
+        const mockData = [{ id: 'id1', name: 'Item 1', updatedAt: new Date() }];
+        const mockModel = createMockModelForCursor(mockData);
+
+        await service.cursorPaginate(
+          mockModel,
+          {},
+          { sortField: 'updatedAt', sortOrder: 'asc' },
+        );
+
+        expect(mockModel.findMany).toHaveBeenCalledWith({
+          take: 11,
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        });
+      });
+    });
+
+    describe('return structure', () => {
+      it('should return correct ICursorPaginatedResult structure', async () => {
+        const mockData = [
+          { id: 'id1', name: 'Item 1' },
+          { id: 'id2', name: 'Item 2' },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result: ICursorPaginatedResult<(typeof mockData)[0]> =
+          await service.cursorPaginate(mockModel, {}, {});
+
+        expect(result).toHaveProperty('data');
+        expect(result).toHaveProperty('meta');
+        expect(result.meta).toHaveProperty('pagination');
+        expect(result.meta.pagination).toHaveProperty('limit');
+        expect(result.meta.pagination).toHaveProperty('hasNextPage');
+        expect(result.meta.pagination).toHaveProperty('hasPreviousPage');
+        expect(result.meta.pagination).toHaveProperty('nextCursor');
+        expect(result.meta.pagination).toHaveProperty('previousCursor');
+      });
+
+      it('should return data array with correct items', async () => {
+        const mockData = [
+          { id: 'id1', name: 'Item 1', createdAt: new Date('2024-01-01') },
+          { id: 'id2', name: 'Item 2', createdAt: new Date('2024-01-02') },
+          { id: 'id3', name: 'Item 3', createdAt: new Date('2024-01-03') },
+        ];
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(mockModel, {}, {});
+
+        expect(result.data).toEqual(mockData);
+        expect(result.data.length).toBe(3);
+      });
+
+      it('should exclude extra item when hasNextPage is true', async () => {
+        const mockData = Array.from({ length: 11 }, (_, i) => ({
+          id: `id${i + 1}`,
+          name: `Item ${i + 1}`,
+        }));
+        const mockModel = createMockModelForCursor(mockData);
+
+        const result = await service.cursorPaginate(
+          mockModel,
+          {},
+          { limit: 10 },
+        );
+
+        expect(result.data).toHaveLength(10);
+        expect((result.data[result.data.length - 1] as { id: string }).id).toBe(
+          'id10',
+        );
       });
     });
   });
